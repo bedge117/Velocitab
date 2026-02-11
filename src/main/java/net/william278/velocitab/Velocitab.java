@@ -43,6 +43,7 @@ import net.william278.velocitab.config.Settings;
 import net.william278.velocitab.config.TabGroupsManager;
 import net.william278.velocitab.hook.Hook;
 import net.william278.velocitab.hook.LuckPermsHook;
+import net.william278.velocitab.multiproxy.MultiProxyManager;
 import net.william278.velocitab.packet.PacketEventManager;
 import net.william278.velocitab.packet.ScoreboardManager;
 import net.william278.velocitab.placeholder.PlaceholderManager;
@@ -53,6 +54,7 @@ import net.william278.velocitab.util.DebugSystem;
 import net.william278.velocitab.vanish.VanishManager;
 import org.bstats.velocity.Metrics;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.event.Level;
 
@@ -87,6 +89,9 @@ public class Velocitab implements ConfigProvider, ScoreboardProvider, LoggerProv
     private PacketEventManager packetEventManager;
     private PluginMessageAPI pluginMessageAPI;
     private PlaceholderManager placeholderManager;
+    @Nullable
+    @Getter
+    private MultiProxyManager multiProxyManager;
     @Setter
     private Toilet toilet;
 
@@ -110,6 +115,7 @@ public class Velocitab implements ConfigProvider, ScoreboardProvider, LoggerProv
         checkForUpdates();
         prepareAPI();
         prepareChannelManager();
+        prepareMultiProxy();
         initializeToilet();
         DebugSystem.initializeTask(this);
         logger.info("Successfully enabled Velocitab");
@@ -117,6 +123,9 @@ public class Velocitab implements ConfigProvider, ScoreboardProvider, LoggerProv
 
     @Subscribe
     public void onProxyShutdown(@NotNull ProxyShutdownEvent event) {
+        if (multiProxyManager != null) {
+            multiProxyManager.disable();
+        }
         disableScoreboardManager();
         getLuckPermsHook().ifPresent(LuckPermsHook::closeEvent);
         unregisterAPI();
@@ -139,6 +148,13 @@ public class Velocitab implements ConfigProvider, ScoreboardProvider, LoggerProv
 
     private void prepareChannelManager() {
         this.packetEventManager = new PacketEventManager(this);
+    }
+
+    private void prepareMultiProxy() {
+        if (settings.getMultiProxy().isEnabled()) {
+            this.multiProxyManager = new MultiProxyManager(this);
+            this.multiProxyManager.enable();
+        }
     }
 
     private void preparePlaceholderManager() {

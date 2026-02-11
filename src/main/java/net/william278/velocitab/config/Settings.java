@@ -25,6 +25,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import net.william278.velocitab.Velocitab;
+import net.william278.velocitab.multiproxy.MultiProxySettings;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
@@ -97,6 +98,9 @@ public class Settings implements ConfigValidator {
 
     @Comment("Whether to enable relational placeholders. With an high amount of players, this could cause lag.")
     private boolean enableRelationalPlaceholders = false;
+
+    @Comment("Multi-proxy support for showing players across multiple Velocity proxies via Redis or MySQL")
+    private MultiProxySettings multiProxy = new MultiProxySettings();
 
     @Comment({"A list of links that will be sent to display on player pause menus (Minecraft 1.21+ clients only).",
             "• Labels can be fully custom or built-in (one of 'bug_report', 'community_guidelines', 'support', 'status',",

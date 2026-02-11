@@ -40,21 +40,27 @@ public class VanishTabList {
 
     public void vanishPlayer(@NotNull TabPlayer tabPlayer) {
         tabList.getPlayers().values().forEach(p -> {
-            if (p.getPlayer().equals(tabPlayer.getPlayer())) {
+            if (p.isRemote()) {
+                return;
+            }
+            if (p.getUniqueId().equals(tabPlayer.getUniqueId())) {
                 return;
             }
 
-            if (!plugin.getVanishManager().canSee(p.getPlayer().getUsername(), tabPlayer.getPlayer().getUsername())) {
-                p.getPlayer().getTabList().removeEntry(tabPlayer.getPlayer().getUniqueId());
+            if (!plugin.getVanishManager().canSee(p.getUsername(), tabPlayer.getUsername())) {
+                p.getPlayer().getTabList().removeEntry(tabPlayer.getUniqueId());
             }
         });
     }
 
     public void unVanishPlayer(@NotNull TabPlayer tabPlayer) {
-        final UUID uuid = tabPlayer.getPlayer().getUniqueId();
+        final UUID uuid = tabPlayer.getUniqueId();
 
         tabList.getPlayers().values().forEach(p -> {
-            if (p.getPlayer().equals(tabPlayer.getPlayer())) {
+            if (p.isRemote()) {
+                return;
+            }
+            if (p.getUniqueId().equals(tabPlayer.getUniqueId())) {
                 return;
             }
 
@@ -74,6 +80,9 @@ public class VanishTabList {
      * @param tabPlayer The TabPlayer object representing the player for whom to recalculate the tab list visibility.
      */
     public void recalculateVanishForPlayer(@NotNull TabPlayer tabPlayer) {
+        if (tabPlayer.isRemote()) {
+            return;
+        }
         final Player player = tabPlayer.getPlayer();
         plugin.getServer().getAllPlayers().forEach(p -> {
             if (p.equals(player)) {
@@ -93,18 +102,18 @@ public class VanishTabList {
                 return;
             }
 
-            if(!p.isActive() || !target.isLoaded()) {
+            if(!target.isActive() || !target.isLoaded()) {
                 return;
             }
 
-            final boolean canSee = !plugin.getVanishManager().isVanished(p.getUsername()) ||
-                                   plugin.getVanishManager().canSee(player.getUsername(), p.getUsername());
+            final boolean canSee = !plugin.getVanishManager().isVanished(target.getUsername()) ||
+                                   plugin.getVanishManager().canSee(tabPlayer.getUsername(), target.getUsername());
 
             if (!canSee) {
-                player.getTabList().removeEntry(p.getUniqueId());
+                player.getTabList().removeEntry(target.getUniqueId());
                 plugin.getScoreboardManager().recalculateVanishForPlayer(tabPlayer, target, false);
             } else {
-                if (!player.getTabList().containsEntry(p.getUniqueId())) {
+                if (!player.getTabList().containsEntry(target.getUniqueId())) {
                     final TabListEntry tabListEntry = tabList.createEntry(target, player.getTabList(), tabPlayer);
                     player.getTabList().addEntry(tabListEntry);
                     plugin.getScoreboardManager().recalculateVanishForPlayer(tabPlayer, target, true);

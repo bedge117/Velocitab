@@ -154,7 +154,7 @@ public record Group(
         return plugin.getTabList().getPlayers()
                 .values()
                 .stream()
-                .filter(tabPlayer -> tabPlayer.isLoaded() && tabPlayer.getGroup().equals(this) && tabPlayer.getPlayer().isActive())
+                .filter(tabPlayer -> tabPlayer.isLoaded() && tabPlayer.getGroup().equals(this) && tabPlayer.isActive())
                 .collect(Collectors.toList());
     }
 
@@ -173,7 +173,7 @@ public record Group(
             return plugin.getTabList().getPlayers()
                     .values()
                     .stream()
-                    .filter(player -> (player.isLoaded() || force) && player.getGroup().equals(this) && tabPlayer.getPlayer().isActive() && player.getServerName().equals(tabPlayer.getServerName()))
+                    .filter(player -> (player.isLoaded() || force) && player.getGroup().equals(this) && tabPlayer.isActive() && player.getServerName().equals(tabPlayer.getServerName()))
                     .collect(Collectors.toList());
         }
 

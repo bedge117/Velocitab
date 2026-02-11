@@ -61,7 +61,7 @@ public class SortingManager {
             result = result.substring(0, 12);
         }
 
-        final String uuid = player.getPlayer().getUniqueId().toString();
+        final String uuid = player.getUniqueId().toString();
         result += uuid.substring(uuid.length() - 4); // Make unique
 
         return result;

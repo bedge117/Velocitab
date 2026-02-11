@@ -184,7 +184,12 @@ public class TaskManager {
         }
 
         final List<String> texts = group.getTextsWithPlaceholders(plugin);
-        players.forEach(player -> plugin.getPlaceholderManager().fetchPlaceholders(player.getPlayer().getUniqueId(), texts, group));
+        players.forEach(player -> {
+            if (player.isRemote()) {
+                return;
+            }
+            plugin.getPlaceholderManager().fetchPlaceholders(player.getUniqueId(), texts, group);
+        });
     }
 
     private void updateLatency(@NotNull Group group) {
@@ -194,9 +199,14 @@ public class TaskManager {
         }
 
         groupPlayers.forEach(player -> {
-            final int latency = (int) player.getPlayer().getPing();
-            groupPlayers.forEach(p -> p.getPlayer().getTabList().getEntry(player.getPlayer().getUniqueId())
-                    .ifPresent(entry -> entry.setLatency(Math.max(latency, 0))));
+            final int latency = player.getPing();
+            groupPlayers.forEach(p -> {
+                if (p.isRemote()) {
+                    return;
+                }
+                p.getPlayer().getTabList().getEntry(player.getUniqueId())
+                        .ifPresent(entry -> entry.setLatency(Math.max(latency, 0)));
+            });
         });
     }
 

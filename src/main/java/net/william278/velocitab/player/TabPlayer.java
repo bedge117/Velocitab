@@ -21,6 +21,7 @@ package net.william278.velocitab.player;
 
 import com.google.common.collect.Maps;
 import com.velocitypowered.api.proxy.Player;
+import com.velocitypowered.api.util.GameProfile;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
@@ -39,7 +40,7 @@ import java.util.UUID;
 
 @Getter
 @ToString
-public final class TabPlayer implements Comparable<TabPlayer> {
+public class TabPlayer implements Comparable<TabPlayer> {
 
     private final Velocitab plugin;
     private final Player player;
@@ -81,6 +82,66 @@ public final class TabPlayer implements Comparable<TabPlayer> {
         this.relationalDisplayNames = Maps.newConcurrentMap();
         this.relationalNametags = Maps.newConcurrentMap();
         this.relationalPermission = relationalPermission;
+    }
+
+    /**
+     * Protected constructor for subclasses that do not have a local Player reference (e.g. remote players).
+     */
+    protected TabPlayer(@NotNull Velocitab plugin, @Nullable Player player,
+                        @NotNull Role role, @NotNull Group group, boolean relationalPermission,
+                        @SuppressWarnings("unused") boolean remote) {
+        this.plugin = plugin;
+        this.player = player;
+        this.role = role;
+        this.group = group;
+        this.relationalDisplayNames = Maps.newConcurrentMap();
+        this.relationalNametags = Maps.newConcurrentMap();
+        this.relationalPermission = relationalPermission;
+    }
+
+    /**
+     * Whether this player is on a remote proxy (not connected to this Velocity instance).
+     */
+    public boolean isRemote() {
+        return false;
+    }
+
+    /**
+     * Get this player's unique ID.
+     */
+    @NotNull
+    public UUID getUniqueId() {
+        return player.getUniqueId();
+    }
+
+    /**
+     * Get this player's username.
+     */
+    @NotNull
+    public String getUsername() {
+        return player.getUsername();
+    }
+
+    /**
+     * Get this player's game profile (includes skin textures).
+     */
+    @NotNull
+    public GameProfile getGameProfile() {
+        return player.getGameProfile();
+    }
+
+    /**
+     * Get this player's latency in milliseconds.
+     */
+    public int getPing() {
+        return Math.max((int) player.getPing(), 0);
+    }
+
+    /**
+     * Whether this player's connection is still active.
+     */
+    public boolean isActive() {
+        return player.isActive();
     }
 
     @NotNull
@@ -128,6 +189,9 @@ public final class TabPlayer implements Comparable<TabPlayer> {
     }
 
     public void sendHeaderAndFooter(@NotNull PlayerTabList tabList) {
+        if (isRemote()) {
+            return;
+        }
         final Component header = tabList.getHeader(this);
         final Component footer = tabList.getFooter(this);
         lastHeader = header;
@@ -206,13 +270,13 @@ public final class TabPlayer implements Comparable<TabPlayer> {
     public int compareTo(@NotNull TabPlayer o) {
         final int roleDifference = role.compareTo(o.role);
         if (roleDifference <= 0) {
-            return player.getUsername().compareTo(o.player.getUsername());
+            return getUsername().compareTo(o.getUsername());
         }
         return roleDifference;
     }
 
     @Override
     public boolean equals(Object obj) {
-        return obj instanceof TabPlayer other && player.getUniqueId().equals(other.player.getUniqueId());
+        return obj instanceof TabPlayer other && getUniqueId().equals(other.getUniqueId());
     }
 }

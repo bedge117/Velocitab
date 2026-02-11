@@ -148,22 +148,24 @@ public class ScoreboardManager {
             return;
         }
 
-        final Player player = tabPlayer.getPlayer();
-        final String teamName = createdTeams.get(player.getUniqueId());
+        final String teamName = createdTeams.get(tabPlayer.getUniqueId());
         if (teamName == null) {
             return;
         }
+        final UUID tabPlayerUuid = tabPlayer.getUniqueId();
+        final String tabPlayerUsername = tabPlayer.getUsername();
         final List<RegisteredServer> siblings = tabPlayer.getGroup().registeredServers(plugin);
         final boolean isNameTagEmpty = tabPlayer.getGroup().nametag().isEmpty() && !plugin.getSettings().isRemoveNametags();
 
         final Optional<Nametag> cachedTag = Optional.ofNullable(nametags.getOrDefault(teamName, null));
-        cachedTag.ifPresent(nametag -> siblings.forEach(server -> server.getPlayersConnected().stream().filter(p -> p != player)
+        cachedTag.ifPresent(nametag -> siblings.forEach(server -> server.getPlayersConnected().stream()
+                .filter(p -> !p.getUniqueId().equals(tabPlayerUuid))
                 .forEach(connected -> {
-                    if (vanish && !plugin.getVanishManager().canSee(connected.getUsername(), player.getUsername())) {
+                    if (vanish && !plugin.getVanishManager().canSee(connected.getUsername(), tabPlayerUsername)) {
                         sendPacket(connected, UpdateTeamsPacket.removeTeam(plugin, teamName), isNameTagEmpty);
                         trackedTeams.remove(connected.getUniqueId(), teamName);
                     } else {
-                        dispatchGroupCreatePacket(plugin, tabPlayer, teamName, nametag, player.getUsername());
+                        dispatchGroupCreatePacket(plugin, tabPlayer, teamName, nametag, tabPlayerUsername);
                     }
                 })));
     }
@@ -176,27 +178,28 @@ public class ScoreboardManager {
      * @param force     Whether to force the update even if the player's nametag is the same.
      */
     public boolean updateRole(@NotNull TabPlayer tabPlayer, @NotNull String role, boolean force) {
-        final Player player = tabPlayer.getPlayer();
-        if (!player.isActive()) {
-            plugin.getTabList().removeOfflinePlayer(player);
-            DebugSystem.log(DebugSystem.DebugLevel.INFO, "Player " + player.getUsername() + " is not active, removing from tab list");
+        if (!tabPlayer.isActive()) {
+            if (!tabPlayer.isRemote()) {
+                plugin.getTabList().removeOfflinePlayer(tabPlayer.getPlayer());
+            }
+            DebugSystem.log(DebugSystem.DebugLevel.INFO, "Player " + tabPlayer.getUsername() + " is not active, removing from tab list");
             return false;
         }
 
-        final String name = player.getUsername();
+        final String name = tabPlayer.getUsername();
         final Nametag nametag = tabPlayer.getNametag(plugin);
-        if (!createdTeams.getOrDefault(player.getUniqueId(), "").equals(role)) {
-            if (createdTeams.containsKey(player.getUniqueId())) {
+        if (!createdTeams.getOrDefault(tabPlayer.getUniqueId(), "").equals(role)) {
+            if (createdTeams.containsKey(tabPlayer.getUniqueId())) {
                 dispatchGroupPacket(
-                        UpdateTeamsPacket.removeTeam(plugin, createdTeams.get(player.getUniqueId())),
+                        UpdateTeamsPacket.removeTeam(plugin, createdTeams.get(tabPlayer.getUniqueId())),
                         tabPlayer
                 );
             }
-            final String oldRole = createdTeams.remove(player.getUniqueId());
+            final String oldRole = createdTeams.remove(tabPlayer.getUniqueId());
             if (oldRole != null) {
                 removeSortedTeam(oldRole);
             }
-            createdTeams.put(player.getUniqueId(), role);
+            createdTeams.put(tabPlayer.getUniqueId(), role);
             final boolean a = sortedTeams.addTeam(role);
             if (!a) {
                 DebugSystem.log(DebugSystem.DebugLevel.ERROR, "Failed to add team " + role + " to sortedTeams");
@@ -215,9 +218,7 @@ public class ScoreboardManager {
     }
 
     public void updatePlaceholders(@NotNull TabPlayer tabPlayer) {
-        final Player player = tabPlayer.getPlayer();
-
-        final String role = createdTeams.get(player.getUniqueId());
+        final String role = createdTeams.get(tabPlayer.getUniqueId());
         if (role == null) {
             return;
         }
@@ -231,6 +232,9 @@ public class ScoreboardManager {
             return;
         }
         if (!plugin.getSettings().isSendScoreboardPackets()) {
+            return;
+        }
+        if (tabPlayer.isRemote()) {
             return;
         }
 
@@ -280,7 +284,10 @@ public class ScoreboardManager {
             return;
         }
         tabPlayer.getGroup().getTabPlayers(plugin, tabPlayer).forEach(viewer -> {
-            if (!viewer.getPlayer().isActive()) {
+            if (viewer.isRemote()) {
+                return;
+            }
+            if (!viewer.isActive()) {
                 return;
             }
 
@@ -296,13 +303,16 @@ public class ScoreboardManager {
         if (!teams) {
             return;
         }
-        final boolean canSee = plugin.getVanishManager().canSee(viewer.getPlayer().getUsername(), tabPlayer.getPlayer().getUsername());
+        if (viewer.isRemote()) {
+            return;
+        }
+        final boolean canSee = plugin.getVanishManager().canSee(viewer.getUsername(), tabPlayer.getUsername());
         if (!canSee) {
             return;
         }
 
         final UpdateTeamsPacket packet = UpdateTeamsPacket.create(plugin, tabPlayer, teamName, nametag, viewer, teamMembers);
-        trackedTeams.put(viewer.getPlayer().getUniqueId(), teamName);
+        trackedTeams.put(viewer.getUniqueId(), teamName);
         final boolean isNameTagEmpty = tabPlayer.getGroup().nametag().isEmpty() && !plugin.getSettings().isRemoveNametags();
         sendPacket(viewer.getPlayer(), packet, isNameTagEmpty);
     }
@@ -315,30 +325,33 @@ public class ScoreboardManager {
         }
         final boolean isNameTagEmpty = tabPlayer.getGroup().nametag().isEmpty() && !plugin.getSettings().isRemoveNametags();
         tabPlayer.getGroup().getTabPlayers(plugin, tabPlayer).forEach(viewer -> {
-            if (!viewer.getPlayer().isActive()) {
+            if (viewer.isRemote()) {
+                return;
+            }
+            if (!viewer.isActive()) {
                 return;
             }
 
-            final boolean canSee = plugin.getVanishManager().canSee(viewer.getPlayer().getUsername(), tabPlayer.getPlayer().getUsername());
+            final boolean canSee = plugin.getVanishManager().canSee(viewer.getUsername(), tabPlayer.getUsername());
             if (!canSee) {
                 return;
             }
 
             // Prevent sending change nametag packets to players who are not tracking the team
-            if (!trackedTeams.containsEntry(viewer.getPlayer().getUniqueId(), teamName)) {
+            if (!trackedTeams.containsEntry(viewer.getUniqueId(), teamName)) {
                 return;
             }
 
             final UpdateTeamsPacket packet = UpdateTeamsPacket.changeNametag(plugin, tabPlayer, teamName, viewer, nametag);
             final Component prefix = packet.prefix();
             final Component suffix = packet.suffix();
-            final Optional<Component[]> cached = tabPlayer.getRelationalNametag(viewer.getPlayer().getUniqueId());
+            final Optional<Component[]> cached = tabPlayer.getRelationalNametag(viewer.getUniqueId());
             // Skip if the nametag is the same as the cached one
             if (!force && cached.isPresent() && cached.get()[0].equals(prefix) && cached.get()[1].equals(suffix)) {
                 return;
             }
 
-            tabPlayer.setRelationalNametag(viewer.getPlayer().getUniqueId(), prefix, suffix);
+            tabPlayer.setRelationalNametag(viewer.getUniqueId(), prefix, suffix);
             sendPacket(viewer.getPlayer(), packet, isNameTagEmpty);
         });
     }
@@ -364,6 +377,23 @@ public class ScoreboardManager {
 
     private void dispatchGroupPacket(@NotNull UpdateTeamsPacket packet, @NotNull TabPlayer tabPlayer) {
         if (!teams) {
+            return;
+        }
+        if (tabPlayer.isRemote()) {
+            // For remote players, still dispatch to local players in the group
+            final List<Player> players = tabPlayer.getGroup().getPlayers(plugin);
+            final boolean isNameTagEmpty = tabPlayer.getGroup().nametag().isEmpty() && !plugin.getSettings().isRemoveNametags();
+            players.forEach(connected -> {
+                try {
+                    final boolean canSee = plugin.getVanishManager().canSee(connected.getUsername(), tabPlayer.getUsername());
+                    if (!canSee) {
+                        return;
+                    }
+                    sendPacket(connected, packet, isNameTagEmpty);
+                } catch (Throwable e) {
+                    plugin.log(Level.ERROR, "Failed to dispatch packet (unsupported client or server version)", e);
+                }
+            });
             return;
         }
         final Player player = tabPlayer.getPlayer();
@@ -454,8 +484,11 @@ public class ScoreboardManager {
         if (!teams) {
             return;
         }
+        if (tabPlayer.isRemote()) {
+            return;
+        }
         final Player player = tabPlayer.getPlayer();
-        final String team = createdTeams.get(target.getPlayer().getUniqueId());
+        final String team = createdTeams.get(target.getUniqueId());
         if (team == null) {
             return;
         }
@@ -468,9 +501,60 @@ public class ScoreboardManager {
         if (canSee) {
             final Nametag tag = nametags.get(team);
             if (tag != null) {
-                dispatchCreatePacket(plugin, tabPlayer, team, tag, target, target.getPlayer().getUsername());
+                dispatchCreatePacket(plugin, tabPlayer, team, tag, target, target.getUsername());
             }
         }
+    }
+
+    /**
+     * Register team data for a remote player and dispatch team creation packets to local viewers.
+     *
+     * @param remotePlayer The remote TabPlayer whose team should be added
+     */
+    public void addRemotePlayerTeam(@NotNull TabPlayer remotePlayer) {
+        if (!teams) {
+            return;
+        }
+        final String teamName = remotePlayer.getTeamName(plugin);
+        if (teamName.isBlank()) {
+            return;
+        }
+
+        final Nametag nametag = remotePlayer.getNametag(plugin);
+        createdTeams.put(remotePlayer.getUniqueId(), teamName);
+        sortedTeams.addTeam(teamName);
+        nametags.put(teamName, nametag);
+        dispatchGroupCreatePacket(plugin, remotePlayer, teamName, nametag, remotePlayer.getUsername());
+    }
+
+    /**
+     * Remove team data for a remote player and dispatch team removal packets to local viewers.
+     *
+     * @param uuid The UUID of the remote player whose team should be removed
+     */
+    public void removeRemotePlayerTeam(@NotNull UUID uuid) {
+        if (!teams) {
+            return;
+        }
+        final String team = createdTeams.remove(uuid);
+        if (team == null) {
+            return;
+        }
+        removeSortedTeam(team);
+
+        final UpdateTeamsPacket removePacket = UpdateTeamsPacket.removeTeam(plugin, team);
+        final Nametag cachedTag = nametags.getOrDefault(team, new Nametag("", ""));
+        final boolean isNameTagEmpty = cachedTag.isEmpty() && !plugin.getSettings().isRemoveNametags();
+        nametags.remove(team);
+
+        plugin.getServer().getAllPlayers().forEach(connected -> {
+            try {
+                sendPacket(connected, removePacket, isNameTagEmpty);
+                trackedTeams.remove(connected.getUniqueId(), team);
+            } catch (Throwable e) {
+                plugin.log(Level.ERROR, "Failed to dispatch remote team removal packet", e);
+            }
+        });
     }
 
 }

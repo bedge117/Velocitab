@@ -43,7 +43,8 @@ public enum Placeholder {
 
     PLAYERS_ONLINE((plugin, player) -> Integer.toString(plugin.getServer().getPlayerCount())),
     MAX_PLAYERS_ONLINE((plugin, player) -> Integer.toString(plugin.getServer().getConfiguration().getShowMaxPlayers())),
-    LOCAL_PLAYERS_ONLINE((plugin, player) -> player.getPlayer().getCurrentServer()
+    LOCAL_PLAYERS_ONLINE((plugin, player) -> player.isRemote() ? "" :
+            player.getPlayer().getCurrentServer()
             .map(ServerConnection::getServer)
             .map(RegisteredServer::getPlayersConnected)
             .map(players -> Integer.toString(players.size()))
@@ -90,10 +91,10 @@ public enum Placeholder {
         final Locale locale = Locale.forLanguageTag(countryCode);
         return DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(locale).format(LocalTime.now());
     }),
-    USERNAME((plugin, player) -> player.getCustomName().orElse(player.getPlayer().getUsername())),
-    USERNAME_LOWER((plugin, player) -> player.getCustomName().orElse(player.getPlayer().getUsername()).toLowerCase()),
+    USERNAME((plugin, player) -> player.getCustomName().orElse(player.getUsername())),
+    USERNAME_LOWER((plugin, player) -> player.getCustomName().orElse(player.getUsername()).toLowerCase()),
     SERVER((plugin, player) -> player.getServerName()),
-    PING((plugin, player) -> Long.toString(player.getPlayer().getPing())),
+    PING((plugin, player) -> Integer.toString(player.getPing())),
     PREFIX((plugin, player) -> player.getRole().getPrefix()
             .orElse(getPlaceholderFallback(plugin, "%luckperms_prefix%"))),
     SUFFIX((plugin, player) -> player.getRole().getSuffix()
@@ -109,6 +110,9 @@ public enum Placeholder {
     SERVER_GROUP_INDEX((plugin, player) -> Integer.toString(player.getServerGroupPosition(plugin))),
     SERVER_ONLINE_PLAYERS((param, plugin, player) -> {
         if (param == null) {
+            if (player.isRemote()) {
+                return "0";
+            }
             return Integer.toString(player.getPlayer().getCurrentServer()
                     .map(ServerConnection::getServer)
                     .map(RegisteredServer::getPlayersConnected)
@@ -119,7 +123,8 @@ public enum Placeholder {
         return Integer.toString(plugin.getServer().getServer(param).map(RegisteredServer::getPlayersConnected).map(Collection::size).orElse(0));
     }),
     DEBUG_TEAM_NAME((plugin, player) -> plugin.getFormatter().escape(player.getLastTeamName().orElse(""))),
-    LUCKPERMS_META((param, plugin, player) -> plugin.getLuckPermsHook()
+    LUCKPERMS_META((param, plugin, player) -> player.isRemote() ? "" :
+            plugin.getLuckPermsHook()
             .map(hook -> hook.getMeta(player.getPlayer(), param))
             .orElse(getPlaceholderFallback(plugin, "%luckperms_meta_" + param + "%"))),
     BACKEND_LUCKPERMS_META_WEIGHT((plugin, player) -> "%luckperms_meta_weight%", true),

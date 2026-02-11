@@ -54,6 +54,13 @@ dependencies {
     implementation 'net.jodah:expiringmap:0.5.11'
     implementation 'net.william278.toilet:toilet-velocity:1.0.14'
 
+    // Multi-proxy backends
+    implementation('io.lettuce:lettuce-core:6.5.5.RELEASE') {
+        exclude group: 'io.netty' // Use Velocity's bundled Netty
+    }
+    implementation 'com.zaxxer:HikariCP:6.2.1'
+    implementation 'org.mariadb.jdbc:mariadb-java-client:3.5.2'
+
     annotationProcessor 'org.projectlombok:lombok:1.18.38'
 }
 
@@ -118,11 +125,20 @@ shadowJar {
     relocate 'net.jodah.expiringmap', 'net.william278.velocitab.libraries.expiringmap'
     relocate 'org.mvel2', 'net.william278.velocitab.libraries.mvel2'
 
+    // Multi-proxy backend relocations
+    relocate 'io.lettuce.core', 'net.william278.velocitab.libraries.lettuce'
+    relocate 'reactor', 'net.william278.velocitab.libraries.reactor'
+    relocate 'org.reactivestreams', 'net.william278.velocitab.libraries.reactivestreams'
+    relocate 'com.zaxxer.hikari', 'net.william278.velocitab.libraries.hikari'
+    relocate 'org.mariadb.jdbc', 'net.william278.velocitab.libraries.mariadb'
+
     destinationDirectory.set(file("$rootDir/target"))
     archiveClassifier.set('')
 
     minimize() {
         exclude dependency('commons-logging:commons-logging')
+        exclude dependency('io.lettuce:.*')
+        exclude dependency('org.mariadb.jdbc:.*')
     }
 }
 jar.dependsOn shadowJar

@@ -212,6 +212,11 @@ public class PlayerTabList {
         sendPlayerServerLinks(tabPlayer);
 
         handleDisplayLoad(tabPlayer);
+
+        // Publish join to other proxies
+        if (!tabPlayer.isRemote() && plugin.getMultiProxyManager() != null) {
+            plugin.getMultiProxyManager().publishPlayerJoin(tabPlayer);
+        }
     }
 
     private void handleDisplayLoad(@NotNull TabPlayer tabPlayer) {
@@ -229,18 +234,19 @@ public class PlayerTabList {
                                      @NotNull List<TabPlayer> tabPlayers, boolean isJoinedVanished) {
         final Player joined = tabPlayer.getPlayer();
         final String serverName = getServerName(joined);
-        final Set<UUID> uuids = tabPlayers.stream().map(p -> p.getPlayer().getUniqueId()).collect(Collectors.toSet());
-        List.copyOf(tabPlayer.getPlayer().getTabList().getEntries()).forEach(entry -> {
-            if (!uuids.contains(entry.getProfile().getId())) {
-                tabPlayer.getPlayer().getTabList().removeEntry(entry.getProfile().getId());
-            }
-        });
+        final Set<UUID> uuids = tabPlayers.stream().map(TabPlayer::getUniqueId).collect(Collectors.toSet());
+        if (!tabPlayer.isRemote()) {
+            List.copyOf(tabPlayer.getPlayer().getTabList().getEntries()).forEach(entry -> {
+                if (!uuids.contains(entry.getProfile().getId())) {
+                    tabPlayer.getPlayer().getTabList().removeEntry(entry.getProfile().getId());
+                }
+            });
+        }
         for (final TabPlayer iteratedPlayer : tabPlayers) {
-            final Player player = iteratedPlayer.getPlayer();
-            final String username = player.getUsername();
+            final String username = iteratedPlayer.getUsername();
             final boolean isPlayerVanished = plugin.getVanishManager().isVanished(username);
 
-            if (group.onlyListPlayersInSameServer() && !serverName.equals(getServerName(player))) {
+            if (group.onlyListPlayersInSameServer() && !serverName.equals(iteratedPlayer.getServerName())) {
                 continue;
             }
 
@@ -263,14 +269,17 @@ public class PlayerTabList {
 
     private void checkVisibilityAndUpdateName(@NotNull TabPlayer observedPlayer, @NotNull TabPlayer viewer,
                                               boolean isObservablePlayerVanished) {
-        final UUID viewerUUID = viewer.getPlayer().getUniqueId();
-        final String observedUsername = observedPlayer.getPlayer().getUsername();
-        final String viewerUsername = viewer.getPlayer().getUsername();
+        if (viewer.isRemote()) {
+            return;
+        }
+        final UUID viewerUUID = viewer.getUniqueId();
+        final String observedUsername = observedPlayer.getUsername();
+        final String viewerUsername = viewer.getUsername();
         final TabList viewerTabList = viewer.getPlayer().getTabList();
 
         if ((isObservablePlayerVanished && !plugin.getVanishManager().canSee(viewerUsername, observedUsername) &&
-                !viewerUUID.equals(observedPlayer.getPlayer().getUniqueId())) || !observedPlayer.getPlayer().isActive()) {
-            viewerTabList.removeEntry(observedPlayer.getPlayer().getUniqueId());
+                !viewerUUID.equals(observedPlayer.getUniqueId())) || !observedPlayer.isActive()) {
+            viewerTabList.removeEntry(observedPlayer.getUniqueId());
         } else {
             calculateAndSetDisplayName(observedPlayer, viewer);
         }
@@ -326,7 +335,9 @@ public class PlayerTabList {
         taskManager.runDelayed(() -> {
             final List<TabPlayer> list = group.getTabPlayers(plugin, tabPlayer.get());
             list.forEach(player -> {
-                player.getPlayer().getTabList().removeEntry(uuid);
+                if (!player.isRemote()) {
+                    player.getPlayer().getTabList().removeEntry(uuid);
+                }
                 player.sendHeaderAndFooter(this);
             });
         }, 250, TimeUnit.MILLISECONDS);
@@ -336,14 +347,19 @@ public class PlayerTabList {
 
         //remove player from tab list cache
         getPlayers().remove(uuid);
+
+        // Publish quit to other proxies
+        if (plugin.getMultiProxyManager() != null) {
+            plugin.getMultiProxyManager().publishPlayerQuit(uuid);
+        }
     }
 
     @NotNull
-    protected TabListEntry createEntry(@NotNull TabPlayer player, @NotNull TabList tabList, @NotNull Component displayName) {
+    public TabListEntry createEntry(@NotNull TabPlayer player, @NotNull TabList tabList, @NotNull Component displayName) {
         return TabListEntry.builder()
-                .profile(player.getPlayer().getGameProfile())
+                .profile(player.getGameProfile())
                 .displayName(displayName)
-                .latency(Math.max((int) player.getPlayer().getPing(), 0))
+                .latency(player.getPing())
                 .tabList(tabList)
                 .showHat(true)
                 .build();
@@ -357,11 +373,11 @@ public class PlayerTabList {
 
         final String displayNameUnformatted = plugin.getPlaceholderManager().applyPlaceholders(player, player.getGroup().format(), viewer);
         final Component displayName = formatRelationalComponent(player, viewer, displayNameUnformatted);
-        player.setRelationalDisplayName(viewer.getPlayer().getUniqueId(), displayName);
+        player.setRelationalDisplayName(viewer.getUniqueId(), displayName);
         return TabListEntry.builder()
-                .profile(player.getPlayer().getGameProfile())
+                .profile(player.getGameProfile())
                 .displayName(displayName)
-                .latency(Math.max((int) player.getPlayer().getPing(), 0))
+                .latency(player.getPing())
                 .tabList(tabList)
                 .showHat(true)
                 .build();
@@ -382,18 +398,21 @@ public class PlayerTabList {
         updateEntryDisplayName(player, viewer, displayName);
     }
 
-    protected void updateEntryDisplayName(@NotNull TabPlayer player, @NotNull TabPlayer viewer, @NotNull Component displayName) {
-        final Optional<Component> cached = player.getRelationalDisplayName(viewer.getPlayer().getUniqueId());
+    public void updateEntryDisplayName(@NotNull TabPlayer player, @NotNull TabPlayer viewer, @NotNull Component displayName) {
+        if (viewer.isRemote()) {
+            return;
+        }
+        final Optional<Component> cached = player.getRelationalDisplayName(viewer.getUniqueId());
         if (cached.isPresent() && cached.get().equals(displayName) &&
-                viewer.getPlayer().getTabList().getEntry(player.getPlayer().getUniqueId())
+                viewer.getPlayer().getTabList().getEntry(player.getUniqueId())
                         .flatMap(TabListEntry::getDisplayNameComponent).map(displayName::equals)
                         .orElse(false)
         ) {
             return;
         }
 
-        player.setRelationalDisplayName(viewer.getPlayer().getUniqueId(), displayName);
-        viewer.getPlayer().getTabList().getEntry(player.getPlayer().getUniqueId())
+        player.setRelationalDisplayName(viewer.getUniqueId(), displayName);
+        viewer.getPlayer().getTabList().getEntry(player.getUniqueId())
                 .ifPresentOrElse(
                         entry -> entry.setDisplayName(displayName),
                         () -> viewer.getPlayer().getTabList()
@@ -420,12 +439,12 @@ public class PlayerTabList {
 
     // Update a player's name in the tab list and scoreboard team
     public void updatePlayer(@NotNull TabPlayer tabPlayer, boolean force) {
-        if (!tabPlayer.getPlayer().isActive()) {
+        if (!tabPlayer.isActive()) {
             removeOfflinePlayer(tabPlayer.getPlayer());
             return;
         }
 
-        plugin.getPlaceholderManager().fetchPlaceholders(tabPlayer.getPlayer().getUniqueId(), tabPlayer.getGroup().sortingPlaceholders(), tabPlayer.getGroup());
+        plugin.getPlaceholderManager().fetchPlaceholders(tabPlayer.getUniqueId(), tabPlayer.getGroup().sortingPlaceholders(), tabPlayer.getGroup());
 
         //to make sure that role placeholder is updated even for a backend placeholder
         taskManager.runDelayed(() -> updateSorting(tabPlayer, force), 100, TimeUnit.MILLISECONDS);
@@ -444,7 +463,7 @@ public class PlayerTabList {
 
     private void updateSorting(@NotNull TabPlayer tabPlayer, boolean force, @NotNull List<TabPlayer> players) {
         final String teamName = tabPlayer.getTeamName(plugin);
-        if (teamName.isBlank() || !tabPlayer.getPlayer().isActive()) {
+        if (teamName.isBlank() || !tabPlayer.isActive()) {
             return;
         }
 
@@ -455,7 +474,7 @@ public class PlayerTabList {
 
         final int order = plugin.getScoreboardManager().getPosition(teamName);
         if (order == -1) {
-            DebugSystem.log(DebugSystem.DebugLevel.ERROR, "Failed to get position for " + tabPlayer.getPlayer().getUsername() + " and " + teamName);
+            DebugSystem.log(DebugSystem.DebugLevel.ERROR, "Failed to get position for " + tabPlayer.getUsername() + " and " + teamName);
             return;
         }
 
@@ -464,10 +483,16 @@ public class PlayerTabList {
     }
 
     private boolean hasListOrder(TabPlayer tabPlayer) {
+        if (tabPlayer.isRemote()) {
+            return false;
+        }
         return tabPlayer.getPlayer().getProtocolVersion().noLessThan(ProtocolVersion.MINECRAFT_1_21_2);
     }
 
     private void updateSorting(TabPlayer tabPlayer, UUID uuid, int position) {
+        if (tabPlayer.isRemote()) {
+            return;
+        }
         tabPlayer.getPlayer().getTabList().getEntry(uuid)
                 .filter(entry -> entry.getListOrder() != position)
                 .ifPresent(entry -> entry.setListOrder(position));
@@ -476,10 +501,13 @@ public class PlayerTabList {
     public synchronized void recalculateSortingForPlayers(@NotNull TabPlayer tabPlayer, @NotNull List<TabPlayer> players, int order) {
         players.stream()
                 .filter(this::hasListOrder)
-                .forEach(p -> updateSorting(p, tabPlayer.getPlayer().getUniqueId(), order));
+                .forEach(p -> updateSorting(p, tabPlayer.getUniqueId(), order));
     }
 
     public void sendPlayerServerLinks(@NotNull TabPlayer player) {
+        if (player.isRemote()) {
+            return;
+        }
         if (player.getPlayer().getProtocolVersion().lessThan(ProtocolVersion.MINECRAFT_1_21)) {
             return;
         }
@@ -531,7 +559,7 @@ public class PlayerTabList {
 
     private void updateRelationalGroupNames(@NotNull List<TabPlayer> players) {
         for (TabPlayer current : players) {
-            if (!current.getPlayer().isActive() || !current.isLoaded()) {
+            if (!current.isActive() || !current.isLoaded()) {
                 continue;
             }
 
@@ -559,7 +587,7 @@ public class PlayerTabList {
         final String unformatted = plugin.getPlaceholderManager().formatVelocitabPlaceholders(withPlaceholders, tabPlayer, null);
         final Component displayName = formatComponent(tabPlayer, unformatted);
 
-        final boolean isVanished = plugin.getVanishManager().isVanished(tabPlayer.getPlayer().getUsername());
+        final boolean isVanished = plugin.getVanishManager().isVanished(tabPlayer.getUsername());
         players.forEach(viewer -> {
             if (cantSeePlayer(viewer, tabPlayer, group, isVanished)) {
                 return;
@@ -577,7 +605,7 @@ public class PlayerTabList {
         // Handles the case where the player is not
         final String formatConditionalPlaceholdersWithoutRelational = plugin.getPlaceholderManager().stripVelocitabRelPlaceholders(formatConditionalPlaceholders);
         final Component relationalPlaceholder = formatComponent(tabPlayer, formatConditionalPlaceholdersWithoutRelational);
-        final boolean isVanished = plugin.getVanishManager().isVanished(tabPlayer.getPlayer().getUsername());
+        final boolean isVanished = plugin.getVanishManager().isVanished(tabPlayer.getUsername());
         players.forEach(viewer -> {
             if (cantSeePlayer(viewer, tabPlayer, group, isVanished)) {
                 return;
@@ -597,10 +625,10 @@ public class PlayerTabList {
 
     public boolean cantSeePlayer(@NotNull TabPlayer viewer, @NotNull TabPlayer tabPlayer,
                                  @NotNull Group group, boolean isVanished) {
-        if (isVanished && !plugin.getVanishManager().canSee(viewer.getPlayer().getUsername(), tabPlayer.getPlayer().getUsername())) {
+        if (isVanished && !plugin.getVanishManager().canSee(viewer.getUsername(), tabPlayer.getUsername())) {
             return true;
         }
-        if (!viewer.getPlayer().isActive() || !viewer.isLoaded()) {
+        if (!viewer.isActive() || !viewer.isLoaded()) {
             return true;
         }
 
@@ -622,9 +650,10 @@ public class PlayerTabList {
         players.values()
                 .stream()
                 .filter(TabPlayer::isLoaded)
-                .forEach(player -> player.getPlayer().getTabList().getEntry(tabPlayer.getPlayer().getUniqueId())
+                .filter(player -> !player.isRemote())
+                .forEach(player -> player.getPlayer().getTabList().getEntry(tabPlayer.getUniqueId())
                         .ifPresent(entry -> {
-                            final Optional<Component> displayNameOptional = tabPlayer.getRelationalDisplayName(player.getPlayer().getUniqueId());
+                            final Optional<Component> displayNameOptional = tabPlayer.getRelationalDisplayName(player.getUniqueId());
                             if (displayNameOptional.isEmpty()) {
                                 return;
                             }
@@ -689,6 +718,9 @@ public class PlayerTabList {
         plugin.getServer().getScheduler().buildTask(plugin, () -> {
             // If the update time is set to 0 do not schedule the updater
             players.values().forEach(player -> {
+                if (player.isRemote()) {
+                    return;
+                }
                 final Optional<ServerConnection> server = player.getPlayer().getCurrentServer();
                 if (server.isEmpty()) {
                     return;
@@ -720,7 +752,12 @@ public class PlayerTabList {
 
     public void removeOldEntry(@NotNull Group group, @NotNull UUID uuid) {
         final List<TabPlayer> players = group.getTabPlayers(plugin);
-        players.forEach(player -> player.getPlayer().getTabList().removeEntry(uuid));
+        players.forEach(player -> {
+            if (player.isRemote()) {
+                return;
+            }
+            player.getPlayer().getTabList().removeEntry(uuid);
+        });
     }
 
     /**

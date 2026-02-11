@@ -162,22 +162,22 @@ public class PlaceholderManager {
 
     @NotNull
     public String applyPlaceholders(@NotNull TabPlayer player, @NotNull String text) {
-        final Map<String, String> parsed = placeholders.computeIfAbsent(player.getPlayer().getUniqueId(), uuid -> Maps.newConcurrentMap());
+        final Map<String, String> parsed = placeholders.computeIfAbsent(player.getUniqueId(), uuid -> Maps.newConcurrentMap());
         return applyPlaceholdersAndReplacements(text, player, parsed);
     }
 
     @NotNull
     public String applyPlaceholders(@NotNull TabPlayer player, @NotNull String text, @NotNull TabPlayer viewer) {
-        final Map<String, String> parsed = placeholders.computeIfAbsent(player.getPlayer().getUniqueId(), uuid -> Maps.newConcurrentMap());
+        final Map<String, String> parsed = placeholders.computeIfAbsent(player.getUniqueId(), uuid -> Maps.newConcurrentMap());
         final String applied = applyPlaceholdersAndReplacements(text, player, parsed);
 
-        final Map<String, String> targetParsed = placeholders.computeIfAbsent(viewer.getPlayer().getUniqueId(), uuid -> Maps.newConcurrentMap());
+        final Map<String, String> targetParsed = placeholders.computeIfAbsent(viewer.getUniqueId(), uuid -> Maps.newConcurrentMap());
         return applyPlaceholdersAndReplacements(applied.replace("%target_", "%"), viewer, targetParsed);
     }
 
     @NotNull
     public String applyViewerPlaceholders(@NotNull TabPlayer viewer, @NotNull String text) {
-        final Map<String, String> parsed = placeholders.computeIfAbsent(viewer.getPlayer().getUniqueId(), uuid -> Maps.newConcurrentMap());
+        final Map<String, String> parsed = placeholders.computeIfAbsent(viewer.getUniqueId(), uuid -> Maps.newConcurrentMap());
         return applyPlaceholdersAndReplacements(text.replace("%target_", "%"), viewer, parsed);
     }
 
