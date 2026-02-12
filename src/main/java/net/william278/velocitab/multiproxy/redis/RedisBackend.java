@@ -104,7 +104,11 @@ public class RedisBackend implements MultiProxyBackend {
             @Override
             public void message(String channel, String message) {
                 // Dispatch OFF Netty event loop immediately
-                messageExecutor.execute(() -> dispatchMessage(channel, message));
+                try {
+                    messageExecutor.execute(() -> dispatchMessage(channel, message));
+                } catch (RejectedExecutionException ignored) {
+                    // Executor shut down during plugin disable — safe to drop
+                }
             }
         });
 
