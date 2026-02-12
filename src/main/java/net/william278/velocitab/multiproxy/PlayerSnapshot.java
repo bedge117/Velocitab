@@ -60,12 +60,20 @@ public class PlayerSnapshot {
     private final int listOrder;
     private final SerializedGameProfile profile;
     private final long timestamp;
+    @Nullable private final String resolvedDisplayName;
+    @Nullable private final String resolvedNametagPrefix;
+    @Nullable private final String resolvedNametagSuffix;
 
     /**
-     * Capture a snapshot from a local TabPlayer. All reads are from RAM (microseconds).
+     * Capture a snapshot from a local TabPlayer with pre-resolved display name.
+     * The resolved display name includes all placeholders (PAPI, built-in) already resolved
+     * so remote proxies don't need to re-resolve them.
      */
     @NotNull
-    public static PlayerSnapshot capture(@NotNull TabPlayer tabPlayer, @NotNull String proxyId) {
+    public static PlayerSnapshot capture(@NotNull TabPlayer tabPlayer, @NotNull String proxyId,
+                                         @Nullable String resolvedDisplayName,
+                                         @Nullable String resolvedNametagPrefix,
+                                         @Nullable String resolvedNametagSuffix) {
         final Role role = tabPlayer.getRole();
         return new PlayerSnapshot(
                 proxyId,
@@ -84,7 +92,10 @@ public class PlayerSnapshot {
                 tabPlayer.getLastTeamName().orElse(null),
                 tabPlayer.getListOrder(),
                 SerializedGameProfile.from(tabPlayer.getGameProfile()),
-                System.currentTimeMillis()
+                System.currentTimeMillis(),
+                resolvedDisplayName,
+                resolvedNametagPrefix,
+                resolvedNametagSuffix
         );
     }
 

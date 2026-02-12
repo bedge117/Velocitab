@@ -19,11 +19,10 @@
 
 package net.william278.velocitab.util;
 
-import com.google.common.collect.Lists;
 import lombok.Getter;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -32,49 +31,62 @@ public class MiniMessageUtil {
     @Getter
     private static final MiniMessageUtil INSTANCE = new MiniMessageUtil();
 
-    private final Pattern legacyRGBPattern = Pattern.compile("#&[0-9a-fA-F]{6}");
-    private final Pattern legacyPattern = Pattern.compile("&[0-9a-fA-F]");
-    private final Pattern legacySectionPattern = Pattern.compile("§[0-9a-fA-F]");
-    private int errorsCount;
+    private final Pattern legacyRGBPattern = Pattern.compile("[#§x][&§][0-9a-fA-F]{6}");
+    private final Pattern legacyAmpersandPattern = Pattern.compile("&[0-9a-fA-FklmnorKLMNOR]");
+    private final Pattern legacySectionPattern = Pattern.compile("§[0-9a-fA-FklmnorKLMNOR]");
+
+    private static final Map<Character, String> LEGACY_TO_MINI = Map.ofEntries(
+            Map.entry('0', "<black>"), Map.entry('1', "<dark_blue>"), Map.entry('2', "<dark_green>"),
+            Map.entry('3', "<dark_aqua>"), Map.entry('4', "<dark_red>"), Map.entry('5', "<dark_purple>"),
+            Map.entry('6', "<gold>"), Map.entry('7', "<gray>"), Map.entry('8', "<dark_gray>"),
+            Map.entry('9', "<blue>"), Map.entry('a', "<green>"), Map.entry('b', "<aqua>"),
+            Map.entry('c', "<red>"), Map.entry('d', "<light_purple>"), Map.entry('e', "<yellow>"),
+            Map.entry('f', "<white>"), Map.entry('k', "<obfuscated>"), Map.entry('l', "<bold>"),
+            Map.entry('m', "<strikethrough>"), Map.entry('n', "<underlined>"), Map.entry('o', "<italic>"),
+            Map.entry('r', "<reset>")
+    );
 
     private MiniMessageUtil() {
-        errorsCount = 0;
     }
 
     @NotNull
     public String checkForErrors(@NotNull String text) {
-        final List<String> errors = Lists.newArrayList();
         String copy = text;
-        copy = processLegacySections(errors, copy, legacyRGBPattern);
-        copy = processLegacySections(errors, copy, legacyPattern);
-        copy = processLegacySections(errors, copy, legacySectionPattern);
-
-        if (errorsCount > 0 && errorsCount % 10 == 0) {
-            errorsCount++;
-            DebugSystem.log(DebugSystem.DebugLevel.WARNING, "Found legacy formatting which is not supported if the formatter is set to MINIMESSAGE." +
-                    " Remove the following characters from your config or make sure placeholders don't contain them: " + errors + ". & and § are replaced with * to prevent issues with MINIMESSAGE.");
-            if(errorsCount > 100000) {
-                errorsCount = 0;
-            }
-        }
-
+        copy = convertLegacyRGB(copy);
+        copy = convertLegacyCodes(copy, legacySectionPattern);
+        copy = convertLegacyCodes(copy, legacyAmpersandPattern);
         return copy;
     }
 
     @NotNull
-    private String processLegacySections(@NotNull List<String> errors, @NotNull String copy, @NotNull Pattern legacySectionPattern) {
+    private String convertLegacyRGB(@NotNull String copy) {
         final StringBuilder result = new StringBuilder();
-        final Matcher legacySectionMatcher = legacySectionPattern.matcher(copy);
+        final Matcher matcher = legacyRGBPattern.matcher(copy);
 
-        while (legacySectionMatcher.find()) {
-            errors.add(legacySectionMatcher.group());
-            String matched = legacySectionMatcher.group();
-            String replaced = "*" + matched.substring(1);
-            legacySectionMatcher.appendReplacement(result, Matcher.quoteReplacement(replaced));
-            errorsCount++;
+        while (matcher.find()) {
+            String matched = matcher.group();
+            // Extract the 6 hex digits from the end
+            String hex = matched.substring(matched.length() - 6);
+            matcher.appendReplacement(result, Matcher.quoteReplacement("<color:#" + hex + ">"));
         }
 
-        legacySectionMatcher.appendTail(result);
+        matcher.appendTail(result);
+        return result.toString();
+    }
+
+    @NotNull
+    private String convertLegacyCodes(@NotNull String copy, @NotNull Pattern pattern) {
+        final StringBuilder result = new StringBuilder();
+        final Matcher matcher = pattern.matcher(copy);
+
+        while (matcher.find()) {
+            String matched = matcher.group();
+            char code = Character.toLowerCase(matched.charAt(1));
+            String replacement = LEGACY_TO_MINI.getOrDefault(code, matched);
+            matcher.appendReplacement(result, Matcher.quoteReplacement(replacement));
+        }
+
+        matcher.appendTail(result);
         return result.toString();
     }
 

@@ -37,14 +37,13 @@ import org.slf4j.Logger;
 
 import java.time.Duration;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.function.BiConsumer;
 
 /**
  * Redis-based multi-proxy backend using Lettuce for async, non-blocking pub/sub.
  * Uses two connections: one for subscribing (dedicated), one for publishing (shared, thread-safe).
+ * All pub/sub callbacks are dispatched OFF the Netty event loop to a dedicated thread pool.
  */
 public class RedisBackend implements MultiProxyBackend {
 
@@ -56,6 +55,9 @@ public class RedisBackend implements MultiProxyBackend {
     private StatefulRedisConnection<String, String> publishConnection;
     private StatefulRedisPubSubConnection<String, String> subscribeConnection;
 
+    // Dedicated thread pool for processing pub/sub messages — keeps Netty event loop clean
+    private ExecutorService messageExecutor;
+
     public RedisBackend(@NotNull Logger logger, @NotNull RedisSettings settings) {
         this.logger = logger;
         this.settings = settings;
@@ -64,6 +66,13 @@ public class RedisBackend implements MultiProxyBackend {
 
     @Override
     public void connect() {
+        // Create dedicated thread pool for message processing (off Netty)
+        this.messageExecutor = Executors.newFixedThreadPool(2, r -> {
+            final Thread t = new Thread(r, "Velocitab Redis Handler");
+            t.setDaemon(true);
+            return t;
+        });
+
         final RedisURI uri = buildUri();
         this.client = RedisClient.create(uri);
         this.client.setOptions(ClientOptions.builder()
@@ -90,11 +99,12 @@ public class RedisBackend implements MultiProxyBackend {
         this.publishConnection = client.connect();
         this.subscribeConnection = client.connectPubSub();
 
-        // Register the global message dispatcher
+        // Register the global message dispatcher — immediately offloads to messageExecutor
         subscribeConnection.addListener(new RedisPubSubAdapter<>() {
             @Override
             public void message(String channel, String message) {
-                dispatchMessage(channel, message);
+                // Dispatch OFF Netty event loop immediately
+                messageExecutor.execute(() -> dispatchMessage(channel, message));
             }
         });
 
@@ -104,6 +114,10 @@ public class RedisBackend implements MultiProxyBackend {
     @Override
     public void disconnect() {
         try {
+            if (messageExecutor != null) {
+                messageExecutor.shutdown();
+                messageExecutor.awaitTermination(2, TimeUnit.SECONDS);
+            }
             if (subscribeConnection != null && subscribeConnection.isOpen()) {
                 subscribeConnection.async().unsubscribe().await(2, TimeUnit.SECONDS);
                 subscribeConnection.close();

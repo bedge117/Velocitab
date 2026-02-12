@@ -213,9 +213,11 @@ public class PlayerTabList {
 
         handleDisplayLoad(tabPlayer);
 
-        // Publish join to other proxies
+        // Publish join to other proxies (delayed to allow placeholders to fully resolve)
         if (!tabPlayer.isRemote() && plugin.getMultiProxyManager() != null) {
-            plugin.getMultiProxyManager().publishPlayerJoin(tabPlayer);
+            plugin.getServer().getScheduler().buildTask(plugin, () ->
+                    plugin.getMultiProxyManager().publishPlayerJoin(tabPlayer)
+            ).delay(2, TimeUnit.SECONDS).schedule();
         }
     }
 
@@ -541,6 +543,9 @@ public class PlayerTabList {
         checkStrippedString(stripped, group);
 
         for (TabPlayer player : players) {
+            if (player.isRemote()) {
+                continue;
+            }
             updateNormalDisplayName(player, players, stripped);
         }
     }
@@ -552,6 +557,9 @@ public class PlayerTabList {
                 .collect(Collectors.toMap(Pair::left, Pair::right));
 
         for (TabPlayer player : players) {
+            if (player.isRemote()) {
+                continue;
+            }
             final String stripped = strippedGroups.get(player.getGroup());
             updateNormalDisplayName(player, players, stripped);
         }
@@ -559,7 +567,7 @@ public class PlayerTabList {
 
     private void updateRelationalGroupNames(@NotNull List<TabPlayer> players) {
         for (TabPlayer current : players) {
-            if (!current.isActive() || !current.isLoaded()) {
+            if (current.isRemote() || !current.isActive() || !current.isLoaded()) {
                 continue;
             }
 

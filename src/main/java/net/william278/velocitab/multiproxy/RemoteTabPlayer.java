@@ -25,6 +25,7 @@ import lombok.Getter;
 import net.william278.velocitab.Velocitab;
 import net.william278.velocitab.config.Group;
 import net.william278.velocitab.player.TabPlayer;
+import net.william278.velocitab.tab.Nametag;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.UUID;
@@ -42,6 +43,10 @@ public class RemoteTabPlayer extends TabPlayer {
     private volatile int ping;
     private volatile boolean vanished;
     private volatile String storedTeamName;
+    @Getter
+    private volatile String resolvedDisplayName;
+    private volatile String resolvedNametagPrefix;
+    private volatile String resolvedNametagSuffix;
 
     public RemoteTabPlayer(@NotNull Velocitab plugin, @NotNull PlayerSnapshot snapshot, @NotNull Group group) {
         super(plugin, null, snapshot.toRole(), group, false, true);
@@ -51,6 +56,9 @@ public class RemoteTabPlayer extends TabPlayer {
         this.ping = snapshot.getPing();
         this.vanished = snapshot.isVanished();
         this.storedTeamName = snapshot.getTeamName();
+        this.resolvedDisplayName = snapshot.getResolvedDisplayName();
+        this.resolvedNametagPrefix = snapshot.getResolvedNametagPrefix();
+        this.resolvedNametagSuffix = snapshot.getResolvedNametagSuffix();
         setCustomName(snapshot.getCustomName());
         setLastServer(snapshot.getServerName());
         setListOrder(snapshot.getListOrder());
@@ -102,6 +110,15 @@ public class RemoteTabPlayer extends TabPlayer {
         return storedTeamName != null ? storedTeamName : "";
     }
 
+    @Override
+    @NotNull
+    public Nametag getNametag(@NotNull Velocitab plugin) {
+        return new Nametag(
+                resolvedNametagPrefix != null ? resolvedNametagPrefix : "",
+                resolvedNametagSuffix != null ? resolvedNametagSuffix : ""
+        );
+    }
+
     public boolean isVanished() {
         return vanished;
     }
@@ -126,6 +143,9 @@ public class RemoteTabPlayer extends TabPlayer {
         this.ping = snapshot.getPing();
         this.vanished = snapshot.isVanished();
         this.storedTeamName = snapshot.getTeamName();
+        this.resolvedDisplayName = snapshot.getResolvedDisplayName();
+        this.resolvedNametagPrefix = snapshot.getResolvedNametagPrefix();
+        this.resolvedNametagSuffix = snapshot.getResolvedNametagSuffix();
         setRole(snapshot.toRole());
         setCustomName(snapshot.getCustomName());
         setLastServer(snapshot.getServerName());
